@@ -62,6 +62,7 @@ function generate_ou_with_resets_plots(results_dir)
     plot_phase_portrait(Dict(:σ => σ, :λ => λ), 0.8 * κ_critical_val; results_dir=results_dir)
     plot_time_series(λ, σ, Θ, N, T, dt; results_dir=results_dir)
     plot_comparative_statics(λ, c0, nu_bar; results_dir=results_dir)
+    plot_hopf_bifurcation(λ, σ, c0, nu_bar; results_dir=results_dir)
 end
 
 """
@@ -252,4 +253,34 @@ function plot_comparative_statics(λ_fixed, c0_fixed, nu_bar_fixed; results_dir=
     combined_plot = plot(p1, p2, layout=(1, 2), size=(1200, 600))
     savefig(combined_plot, joinpath(results_dir, "comparative_statics.png"))
     return combined_plot
+end
+
+# -----------------------------------------------------------
+# 5. HOPF BIFURCATION AMPLITUDE DIAGRAM
+# -----------------------------------------------------------
+"""
+    plot_hopf_bifurcation(λ, σ, c0, nu_bar; results_dir=".")
+
+Computes the critical peer-influence parameter for a Hopf bifurcation and
+plots the amplitude of the emerging limit cycle against the parameter. The
+amplitude is modeled with a square-root scaling above the critical value.
+"""
+function plot_hopf_bifurcation(λ, σ, c0, nu_bar; results_dir=".")
+    V_star_val = V_star(λ, σ, c0, nu_bar)
+    κ_critical = (σ^2) / (2 * V_star_val)
+    κ_values = range(0.0, 1.5 * κ_critical, length=200)
+    amplitudes = [κ <= κ_critical ? 0.0 : sqrt(κ - κ_critical) for κ in κ_values]
+
+    p = plot(κ_values, amplitudes,
+        title = "Hopf Bifurcation", 
+        xlabel = "Peer-Influence Parameter (κ)",
+        ylabel = "Limit Cycle Amplitude",
+        lw = 2,
+        framestyle = :box,
+        label = "Amplitude"
+    )
+    vline!(p, [κ_critical], label="κ*", linestyle=:dot, color=:black)
+
+    savefig(p, joinpath(results_dir, "hopf_bifurcation.png"))
+    return p
 end
