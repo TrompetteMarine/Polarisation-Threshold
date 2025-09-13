@@ -39,6 +39,31 @@ function calculate_steady_state_variance(kappa, λ, σ)
     end
 end
 
+# -----------------------------------------------------------
+# MAIN EXECUTION FUNCTION
+# -----------------------------------------------------------
+function generate_ou_with_resets_plots(results_dir)
+    mkpath(results_dir)
+
+    # Define baseline parameters
+    λ = 0.5
+    σ = 0.1
+    Θ = 1.0
+    N = 200
+    T = 100.0
+    dt = 0.1
+    c0 = 0.0 # Placeholder for jump contraction
+    nu_bar = 0.1 # Placeholder for mean jump rate
+
+    V_star_val = V_star(λ, σ, c0, nu_bar)
+    κ_critical_val = (σ^2) / (2 * V_star_val)
+
+    plot_bifurcation_diagram(λ, σ, V_star_val, c0, nu_bar; results_dir=results_dir)
+    plot_phase_portrait(Dict(:σ => σ, :λ => λ), 0.8 * κ_critical_val; results_dir=results_dir)
+    plot_time_series(λ, σ, Θ, N, T, dt; results_dir=results_dir)
+    plot_comparative_statics(λ, c0, nu_bar; results_dir=results_dir)
+end
+
 """
     V_star(λ, σ, c0, nu_bar)
 
@@ -103,7 +128,7 @@ end
 # -----------------------------------------------------------
 # 1. BIFURCATION DIAGRAM
 # -----------------------------------------------------------
-function plot_bifurcation_diagram(λ, σ, V_star_val, c0, nu_bar)
+function plot_bifurcation_diagram(λ, σ, V_star_val, c0, nu_bar; results_dir=".")
     κ_critical = (σ^2) / (2 * V_star_val)
     κ_values = range(0.0, 1.5 * κ_critical, length=200)
 
@@ -131,14 +156,14 @@ function plot_bifurcation_diagram(λ, σ, V_star_val, c0, nu_bar)
 
     vline!([κ_critical], label="κ*", linestyle=:dot, color=:black)
 
-    savefig(p, "bifurcation_diagram.png")
+    savefig(p, joinpath(results_dir, "bifurcation_diagram.png"))
     return p
 end
 
 # -----------------------------------------------------------
 # 2. PHASE PORTRAIT
 # -----------------------------------------------------------
-function plot_phase_portrait(params, κ_to_plot)
+function plot_phase_portrait(params, κ_to_plot; results_dir=".")
     # This is a conceptual placeholder. A real implementation would require
     # defining the vector field based on the dynamics of mean and variance.
     p = plot(title="Phase Portrait of Belief Dynamics (κ = $κ_to_plot)",
@@ -163,14 +188,14 @@ function plot_phase_portrait(params, κ_to_plot)
 
     quiver!(p, x_range, y_range, quiver=(u_field, v_field))
 
-    savefig(p, "phase_portrait.png")
+    savefig(p, joinpath(results_dir, "phase_portrait.png"))
     return p
 end
 
 # -----------------------------------------------------------
 # 3. TIME SERIES OF BELIEF DYNAMICS
 # -----------------------------------------------------------
-function plot_time_series(λ, σ, Θ, N, T, dt)
+function plot_time_series(λ, σ, Θ, N, T, dt; results_dir=".")
     V_star_val = V_star(λ, σ, 0.0, 0.0)
     κ_critical = (σ^2) / (2 * V_star_val)
 
@@ -193,14 +218,14 @@ function plot_time_series(λ, σ, Θ, N, T, dt)
     plot!(p2, times_p, variances_p, label="Variance", lw=2, color=:red, yaxis=:twinx)
 
     combined_plot = plot(p1, p2, layout=(1, 2), size=(1200, 600))
-    savefig(combined_plot, "time_series_plots.png")
+    savefig(combined_plot, joinpath(results_dir, "time_series_plots.png"))
     return combined_plot
 end
 
 # -----------------------------------------------------------
 # 4. COMPARATIVE STATICS PLOTS
 # -----------------------------------------------------------
-function plot_comparative_statics(λ_fixed, c0_fixed, nu_bar_fixed)
+function plot_comparative_statics(λ_fixed, c0_fixed, nu_bar_fixed; results_dir=".")
     # Plot 1: κ* vs. idiosyncratic noise (σ^2)
     σ_values = range(0.01, 1.0, length=100)
     V_star_val = V_star(λ_fixed, σ_values[1], c0_fixed, nu_bar_fixed)
@@ -225,30 +250,6 @@ function plot_comparative_statics(λ_fixed, c0_fixed, nu_bar_fixed)
     )
 
     combined_plot = plot(p1, p2, layout=(1, 2), size=(1200, 600))
-    savefig(combined_plot, "comparative_statics.png")
+    savefig(combined_plot, joinpath(results_dir, "comparative_statics.png"))
     return combined_plot
 end
-
-# -----------------------------------------------------------
-# MAIN EXECUTION
-# -----------------------------------------------------------
-# Define some baseline parameters
-λ = 0.5
-σ = 0.1
-Θ = 1.0
-N = 200
-T = 100.0
-dt = 0.1
-c0 = 0.0 # Placeholder for jump contraction
-nu_bar = 0.1 # Placeholder for mean jump rate
-
-# Calculate the baseline V* and κ*
-V_star_val = V_star(λ, σ, c0, nu_bar)
-κ_critical_val = (σ^2) / (2 * V_star_val)
-
-# Generate all the plots
-plot_bifurcation_diagram(λ, σ, V_star_val, c0, nu_bar)
-plot_phase_portrait(Dict(:σ => σ, :λ => λ), 0.8 * κ_critical_val) # Example for consensus regime
-plot_time_series(λ, σ, Θ, N, T, dt)
-plot_comparative_statics(λ, c0, nu_bar)
-
