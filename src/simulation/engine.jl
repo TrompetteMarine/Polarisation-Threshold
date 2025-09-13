@@ -1,3 +1,4 @@
+using Statistics
 using DifferentialEquations
 using ..Core: ModelParams, Agent, initialize_agents, ou_drift!, ou_diffusion!
 import ..Simulation: reset_condition, reset_affect!
