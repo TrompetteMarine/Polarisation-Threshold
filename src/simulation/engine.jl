@@ -1,6 +1,6 @@
 using Statistics
 using DifferentialEquations
-using ..Core: ModelParams, Agent, initialize_agents, ou_drift!, ou_diffusion!
+using ..ModelCore: ModelParams, Agent, initialize_agents, ou_drift!, ou_diffusion!
 import ..Simulation: reset_condition, reset_affect!
 
 function compute_mean_field(agents::Vector{Agent})
