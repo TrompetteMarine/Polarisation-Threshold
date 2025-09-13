@@ -12,7 +12,7 @@ function main()
     results_dir = normpath(joinpath(@__DIR__, "..", "results"))
     mkpath(results_dir)
 
-    bif_plot = bifurcation_plot(params, κ_range=0.0:0.01:1.0)
+    bif_plot = bifurcation_plot(params)
     phase_plot = phase_portrait(agents, params)
     mean_plot = plot_mean_field(times, G_history, params)
 
