@@ -165,46 +165,52 @@ end
 # 2. PHASE PORTRAIT
 # -----------------------------------------------------------
 function plot_phase_portrait(params, κ_to_plot; results_dir=".")
-    # This is a conceptual placeholder. A real implementation would require
-    # defining the vector field based on the dynamics of mean and variance.
+    # Phase portrait showing mean (μ) and variance (V) dynamics
     p = plot(title="Phase Portrait of Belief Dynamics (κ = $κ_to_plot)",
              xlabel="Mean Belief (μ)", ylabel="Variance of Beliefs (V)")
 
     # Grid for phase portrait
     x_range = range(-2, 2, length=20)
     y_range = range(0, 5, length=20)
-    X = repeat(x_range, inner=length(y_range))
-    Y = repeat(y_range, outer=length(x_range))
-    U = similar(X)
-    V = similar(Y)
-    colors = Vector{Symbol}(undef, length(X))
+    nx, ny = length(x_range), length(y_range)
+    u_field = zeros(nx, ny)
+    v_field = zeros(nx, ny)
+    stability_metric = zeros(nx, ny)
+    arrow_colors = Array{Symbol}(undef, nx, ny)
 
     κ_critical = (params[:σ]^2) / (2 * V_star(params[:λ], params[:σ], 0.0, 0.0))
 
-    for idx in eachindex(X)
-        x = X[idx]
-        y = Y[idx]
-        # Simplified vector field for illustration
-        U[idx] = -x
-        if κ_to_plot < κ_critical
-            V[idx] = -y
-            dv_dy = -1
-        else
-            V[idx] = -y + y^2
-            dv_dy = -1 + 2y
+    for i in 1:nx
+        x = x_range[i]
+        for j in 1:ny
+            y = y_range[j]
+            # Simplified vector field for illustration
+            u = -x
+            if κ_to_plot < κ_critical
+                v = -y
+                dv_dy = -1
+            else
+                v = -y + y^2
+                dv_dy = -1 + 2y
+            end
+            u_field[i, j] = u
+            v_field[i, j] = v
+            J = [-1 0; 0 dv_dy]  # Jacobian at (x, y)
+            dom_eig = maximum(real.(eigvals(J)))
+            stability_metric[i, j] = dom_eig
+            arrow_colors[i, j] = dom_eig < 0 ? :blue : :red
         end
-        J = [-1 0; 0 dv_dy]  # Jacobian at (x, y)
-        eigs = eigvals(J)
-        colors[idx] = maximum(real.(eigs)) < 0 ? :blue : :red
     end
 
-    stable = findall(colors .== :blue)
-    unstable = findall(colors .== :red)
+    # Optional heatmap overlay of stability metric
+    heatmap!(p, x_range, y_range, stability_metric; alpha=0.3,
+             c=cgrad(:RdBu), colorbar=false)
 
-    quiver!(p, X[stable], Y[stable], quiver=(U[stable], V[stable]),
-            color=:blue, label="Stable (Re<0)")
-    quiver!(p, X[unstable], Y[unstable], quiver=(U[unstable], V[unstable]),
-            color=:red, label="Unstable (Re>0)")
+    # Quiver plot with arrows colored by stability
+    quiver!(p, x_range, y_range, quiver=(u_field, v_field),
+            c=arrow_colors, colorbar=false, label="")
+    scatter!([NaN], [NaN], m=:circle, color=:blue, label="Stable (Re<0)")
+    scatter!([NaN], [NaN], m=:circle, color=:red, label="Unstable (Re>0)")
 
     savefig(p, joinpath(results_dir, "ou_phase_portrait.png"))
     return p
