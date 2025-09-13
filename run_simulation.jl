@@ -1,4 +1,4 @@
-include("src/core/Core.jl")
+include("src/core/ModelCore.jl")
 include("src/simulation/Simulation.jl")
 include("src/visualization/plots.jl")
 include("src/analysis/metrics.jl")

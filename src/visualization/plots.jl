@@ -2,7 +2,7 @@ module Visualization
 
 using Statistics
 using Plots
-using ..Core: ModelParams
+using ..ModelCore: ModelParams
 using ..Simulation: simulate!, initialize_agents
 
 function bifurcation_plot(params::ModelParams; κ_range=0.0:0.01:2.0)

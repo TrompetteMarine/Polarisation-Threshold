@@ -1,4 +1,4 @@
-using .Core: ModelParams, Agent, initialize_agents
+using .ModelCore: ModelParams, Agent, initialize_agents
 using .Simulation: simulate!, compute_mean_field, reset_condition, reset_affect!
 using .Visualization: bifurcation_plot, phase_portrait, plot_mean_field
 using .Analysis: estimate_kappa_star, polarization_metric

@@ -1,7 +1,7 @@
 module Analysis
 
 using Statistics
-using ..Core: Agent, ModelParams
+using ..ModelCore: Agent, ModelParams
 
 function estimate_Vstar(agents::Vector{Agent})
     return var(agent.u for agent in agents)
