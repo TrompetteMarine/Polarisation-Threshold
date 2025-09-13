@@ -7,9 +7,19 @@ using ..Simulation: simulate!, initialize_agents
 function bifurcation_plot(params::ModelParams; κ_range=0.0:0.01:2.0)
     bifurcation_data = Float64[]
     for κ in κ_range
-        params.κ = κ
-        agents = initialize_agents(params)
-        times, G_history, _ = simulate!(agents, params)
+        step_params = ModelParams(
+            λ = params.λ,
+            σ = params.σ,
+            κ = κ,
+            Θ = params.Θ,
+            ϖ = params.ϖ,
+            N = params.N,
+            T = params.T,
+            dt = params.dt,
+            seed = params.seed,
+        )
+        agents = initialize_agents(step_params)
+        times, G_history, _ = simulate!(agents, step_params)
         eq_G = mean(abs.(G_history[end÷10:end]))
         push!(bifurcation_data, eq_G)
     end
