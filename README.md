@@ -8,3 +8,9 @@ A modular Julia implementation of the OU-with-Resets model for studying consensu
    ```bash
    git clone https://github.com/yourusername/OU_with_Resets.git
    cd OU_with_Resets
+   ```
+
+2. Install the Julia dependencies:
+   ```bash
+   julia --project -e 'using Pkg; Pkg.instantiate()'
+   ```
