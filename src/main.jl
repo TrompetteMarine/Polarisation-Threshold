@@ -18,7 +18,7 @@ function main()
     mean_plot = plot_mean_field(times, G_history, params)
 
     savefig(bif_plot, joinpath(results_dir, "bifurcation_plot.png"))
-    savefig(phase_plot, joinpath(results_dir, "phase_portrait.png"))
+    savefig(phase_plot, joinpath(results_dir, "model_phase_portrait.png"))
     savefig(mean_plot, joinpath(results_dir, "mean_field.png"))
 
     generate_ou_with_resets_plots(results_dir)

@@ -188,7 +188,7 @@ function plot_phase_portrait(params, κ_to_plot; results_dir=".")
 
     quiver!(p, x_range, y_range, quiver=(u_field, v_field))
 
-    savefig(p, joinpath(results_dir, "phase_portrait.png"))
+    savefig(p, joinpath(results_dir, "ou_phase_portrait.png"))
     return p
 end
 
