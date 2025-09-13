@@ -1,5 +1,6 @@
 module Visualization
 
+using Statistics
 using Plots
 using ..Core: ModelParams
 using ..Simulation: simulate!, initialize_agents
