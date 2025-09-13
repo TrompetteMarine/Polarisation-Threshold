@@ -1,0 +1,5 @@
+include("src/core/Core.jl")
+include("src/simulation/Simulation.jl")
+include("src/visualization/plots.jl")
+include("src/analysis/metrics.jl")
+include("src/main.jl")
