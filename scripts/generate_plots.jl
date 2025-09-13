@@ -168,25 +168,42 @@ function plot_phase_portrait(params, κ_to_plot; results_dir=".")
     # defining the vector field based on the dynamics of mean and variance.
     p = plot(title="Phase Portrait of Belief Dynamics (κ = $κ_to_plot)",
              xlabel="Mean Belief (μ)", ylabel="Variance of Beliefs (V)")
-    # Example vector field to show conceptual flow
+
+    # Grid for phase portrait
     x_range = range(-2, 2, length=20)
     y_range = range(0, 5, length=20)
-    u_field = similar(x_range)
-    v_field = similar(y_range)
+    X = repeat(x_range, inner=length(y_range))
+    Y = repeat(y_range, outer=length(x_range))
+    U = similar(X)
+    V = similar(Y)
+    colors = Vector{Symbol}(undef, length(X))
 
-    for i in 1:length(x_range)
-        for j in 1:length(y_range)
-            # This is a highly simplified vector field for illustration
-            u_field[i] = -x_range[i]
-            if κ_to_plot < (params[:σ]^2) / (2 * V_star(params[:λ], params[:σ], 0.0, 0.0))
-                v_field[j] = -y_range[j]
-            else
-                v_field[j] = -y_range[j] + y_range[j]^2
-            end
+    κ_critical = (params[:σ]^2) / (2 * V_star(params[:λ], params[:σ], 0.0, 0.0))
+
+    for idx in eachindex(X)
+        x = X[idx]
+        y = Y[idx]
+        # Simplified vector field for illustration
+        U[idx] = -x
+        if κ_to_plot < κ_critical
+            V[idx] = -y
+            dv_dy = -1
+        else
+            V[idx] = -y + y^2
+            dv_dy = -1 + 2y
         end
+        J = [-1 0; 0 dv_dy]  # Jacobian at (x, y)
+        eigs = eigvals(J)
+        colors[idx] = maximum(real.(eigs)) < 0 ? :blue : :red
     end
 
-    quiver!(p, x_range, y_range, quiver=(u_field, v_field))
+    stable = findall(colors .== :blue)
+    unstable = findall(colors .== :red)
+
+    quiver!(p, X[stable], Y[stable], quiver=(U[stable], V[stable]),
+            color=:blue, label="Stable (Re<0)")
+    quiver!(p, X[unstable], Y[unstable], quiver=(U[unstable], V[unstable]),
+            color=:red, label="Unstable (Re>0)")
 
     savefig(p, joinpath(results_dir, "ou_phase_portrait.png"))
     return p
