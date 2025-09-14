@@ -173,18 +173,35 @@ function plot_phase_portrait(params, κ_to_plot; results_dir=".")
     x_range = range(-2, 2, length=20)
     y_range = range(0, 5, length=20)
     nx, ny = length(x_range), length(y_range)
-    x_grid = [x for x in x_range, y in y_range]
-    y_grid = [y for x in x_range, y in y_range]
+
+    u_field = zeros(nx, ny)
+    v_field = zeros(nx, ny)
+    stability_metric = zeros(nx, ny)
+    stability_colors = Array{Symbol}(undef, nx, ny)
 
     κ_critical = (params[:σ]^2) / (2 * V_star(params[:λ], params[:σ], 0.0, 0.0))
 
-    u_field = .-x_grid
-    if κ_to_plot < κ_critical
-        v_field = .-y_grid
-        dv_dy_field = fill(-1.0, size(y_grid))
-    else
-        v_field = -y_grid .+ y_grid.^2
-        dv_dy_field = -1 .+ 2 .* y_grid
+    for i in 1:nx
+        x = x_range[i]
+        for j in 1:ny
+            y = y_range[j]
+            # Simplified vector field for illustration
+            u = -x
+            if κ_to_plot < κ_critical
+                v = -y
+                dv_dy = -1
+            else
+                v = -y + y^2
+                dv_dy = -1 + 2y
+            end
+            u_field[i, j] = u
+            v_field[i, j] = v
+            J = [-1 0; 0 dv_dy]  # Jacobian at (x, y)
+            dom_eig = maximum(real.(eigvals(J)))
+            stability_metric[i, j] = dom_eig
+            stability_colors[i, j] = dom_eig < 0 ? :blue : :red
+        end
+
     end
 
     stability_metric = max.(-1, dv_dy_field)
@@ -192,11 +209,11 @@ function plot_phase_portrait(params, κ_to_plot; results_dir=".")
 
     # Optional heatmap overlay of stability metric
     heatmap!(p, x_range, y_range, stability_metric; alpha=0.3,
-             c=cgrad(:RdBu), colorbar=false)
+             c=cgrad(:RdBu, rev=true), colorbar=false)
 
     # Quiver plot with arrows colored by stability
-    quiver!(p, x_grid, y_grid, quiver=(u_field, v_field),
-            c=arrow_colors, colorbar=false, label="")
+    quiver!(p, x_range, y_range, quiver=(u_field, v_field),
+            c=stability_colors, colorbar=false, label="")
     scatter!([NaN], [NaN], m=:circle, color=:blue, label="Stable (Re<0)")
     scatter!([NaN], [NaN], m=:circle, color=:red, label="Unstable (Re>0)")
 
