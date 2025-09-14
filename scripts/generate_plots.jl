@@ -173,6 +173,7 @@ function plot_phase_portrait(params, κ_to_plot; results_dir=".")
     x_range = range(-2, 2, length=20)
     y_range = range(0, 5, length=20)
     nx, ny = length(x_range), length(y_range)
+
     u_field = zeros(nx, ny)
     v_field = zeros(nx, ny)
     stability_metric = zeros(nx, ny)
@@ -200,7 +201,11 @@ function plot_phase_portrait(params, κ_to_plot; results_dir=".")
             stability_metric[i, j] = dom_eig
             stability_colors[i, j] = dom_eig < 0 ? :blue : :red
         end
+
     end
+
+    stability_metric = max.(-1, dv_dy_field)
+    arrow_colors = map(x -> x < 0 ? :blue : :red, stability_metric)
 
     # Optional heatmap overlay of stability metric
     heatmap!(p, x_range, y_range, stability_metric; alpha=0.3,
@@ -230,7 +235,7 @@ function plot_time_series(λ, σ, Θ, N, T, dt; results_dir=".")
 
     p1 = plot(times_c, beliefs_c, label="", color=:lightgray, lw=0.5, title="Consensus (κ < κ*)")
     plot!(p1, times_c, means_c, label="Mean", lw=2, color=:blue)
-    ax_c = twinx()
+    ax_c = twinx(p1)
     plot!(ax_c, times_c, variances_c; label="Variance", color=:red, lw=2)
 
     # Case 2: Polarization (κ > κ*)
@@ -240,7 +245,7 @@ function plot_time_series(λ, σ, Θ, N, T, dt; results_dir=".")
 
     p2 = plot(times_p, beliefs_p, label="", color=:lightgray, lw=0.5, title="Polarization (κ > κ*)")
     plot!(p2, times_p, means_p, label="Mean", lw=2, color=:blue)
-    ax_p = twinx()
+    ax_p = twinx(p2)
     plot!(ax_p, times_p, variances_p; label="Variance", color=:red, lw=2)
 
     combined_plot = plot(p1, p2, layout=(1, 2), size=(1200, 600))
@@ -286,18 +291,38 @@ end
 """
     plot_hopf_bifurcation(λ, σ, c0, nu_bar; results_dir=".")
 
-Computes the critical peer-influence parameter for a Hopf bifurcation and
-plots the amplitude of the emerging limit cycle against the parameter. The
-amplitude is modeled with a square-root scaling above the critical value.
+Generate and save the amplitude diagram for a Hopf bifurcation. The control
+parameter is the peer-influence `κ` and the oscillation amplitude is obtained
+by numerically integrating the Hopf normal form for `κ` above its critical
+value.
 """
 function plot_hopf_bifurcation(λ, σ, c0, nu_bar; results_dir=".")
     V_star_val = V_star(λ, σ, c0, nu_bar)
     κ_critical = (σ^2) / (2 * V_star_val)
-    κ_values = range(0.0, 1.5 * κ_critical, length=200)
-    amplitudes = [κ <= κ_critical ? 0.0 : sqrt(κ - κ_critical) for κ in κ_values]
+    κ_values = range(0.0, 1.5 * κ_critical, length=100)
+
+    function hopf_norm!(du, u, μ, t)
+        x, y = u
+        r2 = x^2 + y^2
+        du[1] = μ * x - y - r2 * x
+        du[2] = x + μ * y - r2 * y
+    end
+
+    amplitudes = Float64[]
+    for κ in κ_values
+        μ = κ - κ_critical
+        if μ <= 0
+            push!(amplitudes, 0.0)
+            continue
+        end
+        prob = ODEProblem(hopf_norm!, [0.1, 0.0], (0.0, 50.0), μ)
+        sol = solve(prob, Tsit5(); reltol=1e-8, abstol=1e-8)
+        r = sqrt.(sol[1, :] .^ 2 .+ sol[2, :] .^ 2)
+        push!(amplitudes, mean(r[end-10:end]))
+    end
 
     p = plot(κ_values, amplitudes,
-        title = "Hopf Bifurcation", 
+        title = "Hopf Bifurcation",
         xlabel = "Peer-Influence Parameter (κ)",
         ylabel = "Limit Cycle Amplitude",
         lw = 2,
