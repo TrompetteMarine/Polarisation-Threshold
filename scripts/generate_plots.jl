@@ -286,18 +286,38 @@ end
 """
     plot_hopf_bifurcation(λ, σ, c0, nu_bar; results_dir=".")
 
-Computes the critical peer-influence parameter for a Hopf bifurcation and
-plots the amplitude of the emerging limit cycle against the parameter. The
-amplitude is modeled with a square-root scaling above the critical value.
+Generate and save the amplitude diagram for a Hopf bifurcation. The control
+parameter is the peer-influence `κ` and the oscillation amplitude is obtained
+by numerically integrating the Hopf normal form for `κ` above its critical
+value.
 """
 function plot_hopf_bifurcation(λ, σ, c0, nu_bar; results_dir=".")
     V_star_val = V_star(λ, σ, c0, nu_bar)
     κ_critical = (σ^2) / (2 * V_star_val)
-    κ_values = range(0.0, 1.5 * κ_critical, length=200)
-    amplitudes = [κ <= κ_critical ? 0.0 : sqrt(κ - κ_critical) for κ in κ_values]
+    κ_values = range(0.0, 1.5 * κ_critical, length=100)
+
+    function hopf_norm!(du, u, μ, t)
+        x, y = u
+        r2 = x^2 + y^2
+        du[1] = μ * x - y - r2 * x
+        du[2] = x + μ * y - r2 * y
+    end
+
+    amplitudes = Float64[]
+    for κ in κ_values
+        μ = κ - κ_critical
+        if μ <= 0
+            push!(amplitudes, 0.0)
+            continue
+        end
+        prob = ODEProblem(hopf_norm!, [0.1, 0.0], (0.0, 50.0), μ)
+        sol = solve(prob, Tsit5(); reltol=1e-8, abstol=1e-8)
+        r = sqrt.(sol[1, :] .^ 2 .+ sol[2, :] .^ 2)
+        push!(amplitudes, mean(r[end-10:end]))
+    end
 
     p = plot(κ_values, amplitudes,
-        title = "Hopf Bifurcation", 
+        title = "Hopf Bifurcation",
         xlabel = "Peer-Influence Parameter (κ)",
         ylabel = "Limit Cycle Amplitude",
         lw = 2,
