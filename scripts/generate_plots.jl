@@ -218,7 +218,7 @@ function plot_time_series(λ, σ, Θ, N, T, dt; results_dir=".")
 
     p1 = plot(times_c, beliefs_c, label="", color=:lightgray, lw=0.5, title="Consensus (κ < κ*)")
     plot!(p1, times_c, means_c, label="Mean", lw=2, color=:blue)
-    ax_c = twinx()
+    ax_c = twinx(p1)
     plot!(ax_c, times_c, variances_c; label="Variance", color=:red, lw=2)
 
     # Case 2: Polarization (κ > κ*)
@@ -228,7 +228,7 @@ function plot_time_series(λ, σ, Θ, N, T, dt; results_dir=".")
 
     p2 = plot(times_p, beliefs_p, label="", color=:lightgray, lw=0.5, title="Polarization (κ > κ*)")
     plot!(p2, times_p, means_p, label="Mean", lw=2, color=:blue)
-    ax_p = twinx()
+    ax_p = twinx(p2)
     plot!(ax_p, times_p, variances_p; label="Variance", color=:red, lw=2)
 
     combined_plot = plot(p1, p2, layout=(1, 2), size=(1200, 600))
