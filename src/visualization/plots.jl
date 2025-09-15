@@ -81,7 +81,7 @@ function bifurcation_plot(params::ModelParams; κ_range=0.0:0.01:2.0)
 
     stable_means = [haskey(stable_map, κ) ? mean(stable_map[κ]) : NaN for κ in κ_range]
     smoothed = moving_average(stable_means, 5)
-    valid = .!isnan(smoothed)
+    valid = .!isnan.(smoothed)
     plot!(plt, collect(κ_range)[valid], smoothed[valid],
           color=:blue, linewidth=2, label="Stable mean")
 
@@ -109,7 +109,9 @@ function phase_portrait(agents, params::ModelParams)
             ylabel="Belief (x)",
             title="Phase Portrait (κ = $(params.κ))",
             legend=false)
-    quiver!(r_grid, x_grid, dr, dx; color=:black, legend=false)
+    # GRID STYLE: x- and y-axes as vectors; u,v as matrices of the same size
+    quiver!(r_vals, x_vals; quiver=(dr, dx), color=:black, legend=false)
+
 
     agent_r = [agent.r for agent in agents]
     agent_x = [agent.x for agent in agents]

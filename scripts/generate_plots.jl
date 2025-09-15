@@ -1,336 +1,304 @@
-# -----------------------------------------------------------
-# Julia Script to Generate Key Plots for a Social Learning Model
-# This script is tailored to the "OU-with-Resets" model described in the provided
-# papers, which features a supercritical pitchfork bifurcation.
-# -----------------------------------------------------------
+# ===========================================================
+# Plot generation for the OU-with-Resets toy model
+# (self-contained; no external project code required)
+#
+# Run:
+#   julia --project=. scripts/generate_plots.jl
+# or just:
+#   julia scripts/generate_plots.jl
+# ===========================================================
 
 using Plots
-using StatsPlots
-using DifferentialEquations
 using Random
 using Statistics
 using LinearAlgebra
 
 # -----------------------------------------------------------
-# CORE MODEL FUNCTIONS (Placeholders based on the paper's theory)
-# Replace these with the actual implementation based on the paper's equations.
+# Utilities
 # -----------------------------------------------------------
 
 """
-    calculate_steady_state_variance(kappa, λ, σ)
+    V_star(lambda, sigma, c0, nubar)
 
-Calculates the steady-state variance of beliefs for the OU-with-Resets model.
-Assumes the jump mechanism is at the origin for simplicity.
-This function implements the fixed-point equation derived in the paper.
+Toy stationary variance on the consensus branch (placeholder).
+Used to define κ* = σ^2 / (2 V*). Keep c0, nubar for compatibility.
 """
-function calculate_steady_state_variance(kappa, λ, σ)
-    # This is a conceptual implementation of the fixed-point equation from the paper.
-    # The paper shows that for κ < κ*, V* is unique and non-zero, while for κ > κ*,
-    # there are three equilibria (V*=0, and two non-zero).
-    # This function returns the stable non-zero value for κ > κ* and zero otherwise.
-    κ_critical = (σ^2) / (2 * V_star(λ, σ, 0.0, 0.0))
-    if kappa <= κ_critical
+function V_star(lambda::Float64, sigma::Float64, c0::Float64, nubar::Float64)
+    # Simple OU-like balance with additional dissipation from jump mechanism
+    return (sigma^2) / (2 * (lambda + (1 - c0^2) * nubar + eps()))  # eps() to avoid div-by-zero
+end
+
+"""
+    calculate_steady_state_variance(kappa, lambda, sigma, c0, nubar; scale=10.0)
+
+Toy bifurcation branch: zero below κ*, positive above with sqrt-scaling.
+This is a stand-in visualization (not a calibrated formula).
+"""
+function calculate_steady_state_variance(kappa::Float64, lambda::Float64, sigma::Float64,
+                                         c0::Float64, nubar::Float64; scale::Float64=10.0)
+    kappa_crit = (sigma^2) / (2 * V_star(lambda, sigma, c0, nubar))
+    if kappa <= kappa_crit
         return 0.0
     else
-        # Placeholder for the non-zero equilibrium value
-        # In a full implementation, this would be a function of kappa, lambda, sigma.
-        # We can approximate it as a square-root relationship near the bifurcation point.
-        return 10.0 * sqrt(abs(kappa - κ_critical))
+        return scale * sqrt(kappa - kappa_crit)
     end
-end
-
-# -----------------------------------------------------------
-# MAIN EXECUTION FUNCTION
-# -----------------------------------------------------------
-function generate_ou_with_resets_plots(results_dir)
-    mkpath(results_dir)
-
-    # Define baseline parameters
-    λ = 0.5
-    σ = 0.1
-    Θ = 1.0
-    N = 200
-    T = 100.0
-    dt = 0.1
-    c0 = 0.0 # Placeholder for jump contraction
-    nu_bar = 0.1 # Placeholder for mean jump rate
-
-    V_star_val = V_star(λ, σ, c0, nu_bar)
-    κ_critical_val = (σ^2) / (2 * V_star_val)
-
-    plot_bifurcation_diagram(λ, σ, V_star_val, c0, nu_bar; results_dir=results_dir)
-    plot_phase_portrait(Dict(:σ => σ, :λ => λ), 0.8 * κ_critical_val; results_dir=results_dir)
-    plot_time_series(λ, σ, Θ, N, T, dt; results_dir=results_dir)
-    plot_comparative_statics(λ, c0, nu_bar; results_dir=results_dir)
-    plot_hopf_bifurcation(λ, σ, c0, nu_bar; results_dir=results_dir)
-end
-
-"""
-    V_star(λ, σ, c0, nu_bar)
-
-Calculates the baseline stationary variance V* on the consensus branch.
-This value is required for the critical kappa formula κ* = σ^2 / (2V*).
-This is derived from the variance-balance equation in the paper (B.8 in Appendix B).
-"""
-function V_star(λ, σ, c0, nu_bar)
-    # This is a simplified placeholder based on the paper's formula (B.8)
-    return (σ^2) / (2 * (λ + (1 - c0^2) * nu_bar))
 end
 
 """
     simulate_ou_with_resets(N, params, T, dt)
 
-Simulates the finite-N jump-diffusion system from the paper.
-It returns time series for individual beliefs, population mean, and variance.
+Simulates a toy finite-N system:
+    dx_i = (-λ x_i + κ * mean(x)) dt + σ dW_i
+and an instantaneous reset to 0 when |x_i| > Θ.
+
+Returns (times, beliefs, means, variances).
 """
-function simulate_ou_with_resets(N, params, T, dt)
-    λ, κ, σ, Θ = params[:λ], params[:κ], params[:σ], params[:Θ]
-    # Pre-allocate arrays
+function simulate_ou_with_resets(N::Int, params::Dict{Symbol,Float64}, T::Float64, dt::Float64)
+    lambda = params[:λ]
+    kappa  = params[:κ]
+    sigma  = params[:σ]
+    theta  = params[:Θ]
+
     num_steps = floor(Int, T / dt) + 1
-    beliefs = zeros(num_steps, N)
-    beliefs[1, :] = randn(N) # Initial beliefs
+    times = collect(0:dt:T)
 
-    # Store population stats
-    means = zeros(num_steps)
-    variances = zeros(num_steps)
+    beliefs = zeros(Float64, num_steps, N)
+    beliefs[1, :] .= randn(N)  # initial condition
 
-    means[1] = mean(beliefs[1, :])
+    means     = similar(times)
+    variances = similar(times)
+
+    means[1]     = mean(beliefs[1, :])
     variances[1] = var(beliefs[1, :])
 
-    for t in 1:num_steps-1
-        # Individual belief update
+    sqrt_dt = sqrt(dt)
+    for t in 1:(num_steps - 1)
+        m = means[t]
         for i in 1:N
-            # OU Drift Term
-            drift = -λ * beliefs[t, i]
+            x = beliefs[t, i]
+            drift = -lambda * x + kappa * m
+            diffusion = sigma * randn() * sqrt_dt
 
-            # Social Influence Term (mean-field)
-            social_influence = κ * mean(beliefs[t, :])
+            x_new = x + drift * dt + diffusion
 
-            # Jump Term (if threshold exceeded)
-            jump = 0.0
-            if abs(beliefs[t, i]) > Θ
-                jump = -beliefs[t, i] # Snap back to origin (r=0)
+            # instantaneous reset if threshold exceeded
+            if abs(x_new) > theta
+                x_new = 0.0
             end
-
-            # Diffusion Term
-            diffusion = σ * randn() * sqrt(dt)
-
-            beliefs[t+1, i] = beliefs[t, i] + (drift + social_influence) * dt + diffusion + jump
+            beliefs[t + 1, i] = x_new
         end
-
-        # Calculate population statistics
-        means[t+1] = mean(beliefs[t+1, :])
-        variances[t+1] = var(beliefs[t+1, :])
+        means[t + 1]     = mean(beliefs[t + 1, :])
+        variances[t + 1] = var(beliefs[t + 1, :])
     end
 
-    return collect(0:dt:T), beliefs, means, variances
+    return times, beliefs, means, variances
 end
 
 # -----------------------------------------------------------
-# 1. BIFURCATION DIAGRAM
+# Plots
 # -----------------------------------------------------------
-function plot_bifurcation_diagram(λ, σ, V_star_val, c0, nu_bar; results_dir=".")
-    κ_critical = (σ^2) / (2 * V_star_val)
-    κ_values = range(0.0, 1.5 * κ_critical, length=200)
 
-    # Stable branches
-    stable_variances = [calculate_steady_state_variance(κ, λ, σ) for κ in κ_values]
+function plot_bifurcation_diagram(lambda::Float64, sigma::Float64, c0::Float64, nubar::Float64; results_dir::String=".")
+    kappa_crit = (sigma^2) / (2 * V_star(lambda, sigma, c0, nubar))
+    kappa_values = range(0.0, 1.5 * kappa_crit, length=200)
 
-    # Unstable branch (at V=0 for κ > κ_critical)
-    unstable_variances = zeros(length(κ_values))
+    stable_variances = [calculate_steady_state_variance(κ, lambda, sigma, c0, nubar) for κ in kappa_values]
+    unstable_variances = zeros(length(kappa_values))  # V=0 branch above κ*
 
-    p = plot(κ_values, stable_variances,
-        title = "Supercritical Pitchfork Bifurcation",
-        xlabel = "Peer-Influence Parameter (κ)",
-        ylabel = "Steady-State Variance of Beliefs (V*)",
-        label = "Stable Equilibrium",
+    p = plot(kappa_values, stable_variances,
+        title = "Supercritical Pitchfork (toy)",
+        xlabel = "Peer Influence (κ)",
+        ylabel = "Steady-State Variance V*",
+        label = "Stable branch",
         lw = 2,
-        framestyle = :box
+        framestyle = :box,
+        size=(900, 550),
     )
-
-    plot!(p, κ_values, unstable_variances,
-        label = "Unstable Equilibrium",
+    plot!(p, kappa_values, unstable_variances,
+        label = "Unstable branch",
         linestyle = :dash,
         lw = 1.5,
-        color = :red
     )
-
-    vline!([κ_critical], label="κ*", linestyle=:dot, color=:black)
+    vline!(p, [kappa_crit], label="κ*", linestyle=:dot, color=:black)
 
     savefig(p, joinpath(results_dir, "bifurcation_diagram.png"))
     return p
 end
 
-# -----------------------------------------------------------
-# 2. PHASE PORTRAIT
-# -----------------------------------------------------------
-function plot_phase_portrait(params, κ_to_plot; results_dir=".")
-    # Phase portrait showing mean (μ) and variance (V) dynamics
-    p = plot(title="Phase Portrait of Belief Dynamics (κ = $κ_to_plot)",
-             xlabel="Mean Belief (μ)", ylabel="Variance of Beliefs (V)")
+function plot_phase_portrait(params::Dict{Symbol,Float64}, kappa_to_plot::Float64; results_dir::String=".")
+    lambda = params[:λ]
+    sigma  = params[:σ]
 
-    # Grid for phase portrait
-    x_range = range(-2, 2, length=20)
-    y_range = range(0, 5, length=20)
-    nx, ny = length(x_range), length(y_range)
+    p = plot(title="Phase Portrait (κ = $(round(kappa_to_plot, digits=3)))",
+             xlabel="Mean μ", ylabel="Variance V",
+             framestyle=:box, size=(900, 550))
 
-    u_field = zeros(nx, ny)
-    v_field = zeros(nx, ny)
-    stability_metric = zeros(nx, ny)
-    stability_colors = Array{Symbol}(undef, nx, ny)
+    # consensus-branch κ* (for coloring switch)
+    kappa_crit = (sigma^2) / (2 * V_star(lambda, sigma, 0.0, 0.0))
 
-    κ_critical = (params[:σ]^2) / (2 * V_star(params[:λ], params[:σ], 0.0, 0.0))
+    # grid
+    x_range = range(-2, 2, length=25)
+    y_range = range(0,  5, length=25)
+    X = repeat(x_range, inner=length(y_range))
+    Y = repeat(y_range, outer=length(x_range))
 
-    for i in 1:nx
-        x = x_range[i]
-        for j in 1:ny
-            y = y_range[j]
-            # Simplified vector field for illustration
-            u = -x
-            if κ_to_plot < κ_critical
-                v = -y
-                dv_dy = -1
-            else
-                v = -y + y^2
-                dv_dy = -1 + 2y
-            end
-            u_field[i, j] = u
-            v_field[i, j] = v
-            J = [-1 0; 0 dv_dy]  # Jacobian at (x, y)
-            dom_eig = maximum(real.(eigvals(J)))
-            stability_metric[i, j] = dom_eig
-            stability_colors[i, j] = dom_eig < 0 ? :blue : :red
+    U = similar(X)              # dμ/dt
+    W = similar(Y)              # dV/dt
+    dvdV_grid = similar(Y)      # ∂(dV/dt)/∂V
+    colors = Vector{Symbol}(undef, length(X))
+
+    for idx in eachindex(X)
+        x = X[idx]; y = Y[idx]
+
+        # toy field:
+        # dμ/dt = -λ μ (pure mean reversion for μ)
+        # dV/dt switches behavior below/above κ*
+        U[idx] = -lambda * x
+        if kappa_to_plot < kappa_crit
+            W[idx] = -y
+            dvdV_grid[idx] = -1.0
+        else
+            W[idx] = -y + y^2
+            dvdV_grid[idx] = -1.0 + 2y
         end
 
+        # Diagonal Jacobian eigenvalues: (-λ, dvdV)
+        colors[idx] = (max(-lambda, dvdV_grid[idx]) < 0) ? :blue : :red
     end
 
-    stability_metric = max.(-1, dv_dy_field)
-    arrow_colors = map(x -> x < 0 ? :blue : :red, stability_metric)
+    stable   = findall(c -> c == :blue, colors)
+    unstable = findall(c -> c == :red,  colors)
 
-    # Optional heatmap overlay of stability metric
-    heatmap!(p, x_range, y_range, stability_metric; alpha=0.3,
-             c=cgrad(:RdBu, rev=true), colorbar=false)
-
-    # Quiver plot with arrows colored by stability
-    quiver!(p, x_range, y_range, quiver=(u_field, v_field),
-            c=stability_colors, colorbar=false, label="")
-    scatter!([NaN], [NaN], m=:circle, color=:blue, label="Stable (Re<0)")
-    scatter!([NaN], [NaN], m=:circle, color=:red, label="Unstable (Re>0)")
+    quiver!(p, X[stable],   Y[stable],   quiver=(U[stable], W[stable]), color=:blue, label="Stable (Re<0)")
+    quiver!(p, X[unstable], Y[unstable], quiver=(U[unstable], W[unstable]), color=:red,  label="Unstable (Re>0)")
 
     savefig(p, joinpath(results_dir, "ou_phase_portrait.png"))
     return p
 end
 
-# -----------------------------------------------------------
-# 3. TIME SERIES OF BELIEF DYNAMICS
-# -----------------------------------------------------------
-function plot_time_series(λ, σ, Θ, N, T, dt; results_dir=".")
-    V_star_val = V_star(λ, σ, 0.0, 0.0)
-    κ_critical = (σ^2) / (2 * V_star_val)
+function plot_time_series(lambda::Float64, sigma::Float64, theta::Float64, N::Int, T::Float64, dt::Float64; results_dir::String=".")
+    # κ* from consensus variance (c0=nubar=0 for this diagnostic)
+    Vstar0 = V_star(lambda, sigma, 0.0, 0.0)
+    kappa_crit = (sigma^2) / (2 * Vstar0)
 
-    # Case 1: Consensus (κ < κ*)
-    κ_consensus = 0.5 * κ_critical
-    params_c = Dict(:λ => λ, :κ => κ_consensus, :σ => σ, :Θ => Θ)
-    times_c, beliefs_c, means_c, variances_c = simulate_ou_with_resets(N, params_c, T, dt)
+    # Case A: κ < κ*
+    kappa_consensus = 0.5 * kappa_crit
+    params_c = Dict(:λ => lambda, :κ => kappa_consensus, :σ => sigma, :Θ => theta)
+    times_c, beliefs_c, means_c, vars_c = simulate_ou_with_resets(N, params_c, T, dt)
 
-    p1 = plot(times_c, beliefs_c, label="", color=:lightgray, lw=0.5, title="Consensus (κ < κ*)")
-    plot!(p1, times_c, means_c, label="Mean", lw=2, color=:blue)
-    ax_c = twinx(p1)
-    plot!(ax_c, times_c, variances_c; label="Variance", color=:red, lw=2)
+    # Case B: κ > κ*
+    kappa_polar = 1.2 * kappa_crit
+    params_p = Dict(:λ => lambda, :κ => kappa_polar, :σ => sigma, :Θ => theta)
+    times_p, beliefs_p, means_p, vars_p = simulate_ou_with_resets(N, params_p, T, dt)
 
-    # Case 2: Polarization (κ > κ*)
-    κ_polarization = 1.2 * κ_critical
-    params_p = Dict(:λ => λ, :κ => κ_polarization, :σ => σ, :Θ => Θ)
-    times_p, beliefs_p, means_p, variances_p = simulate_ou_with_resets(N, params_p, T, dt)
+    # plot a subset of individuals to keep rendering light
+    k = min(N, 50)
 
-    p2 = plot(times_p, beliefs_p, label="", color=:lightgray, lw=0.5, title="Polarization (κ > κ*)")
-    plot!(p2, times_p, means_p, label="Mean", lw=2, color=:blue)
-    ax_p = twinx(p2)
-    plot!(ax_p, times_p, variances_p; label="Variance", color=:red, lw=2)
+    p1 = plot(title="Consensus Regime (κ < κ*)", xlabel="t", ylabel="x_i / μ / V",
+              framestyle=:box)
+    plot!(p1, times_c, beliefs_c[:, 1:k], label="", color=:lightgray, lw=0.5)
+    plot!(p1, times_c, means_c, label="Mean μ(t)", lw=2)
+    plot!(p1, times_c, vars_c, label="Variance V(t)", lw=2, yaxis=:right)
 
-    combined_plot = plot(p1, p2, layout=(1, 2), size=(1200, 600))
-    savefig(combined_plot, joinpath(results_dir, "time_series_plots.png"))
-    return combined_plot
+    p2 = plot(title="Polarization Regime (κ > κ*)", xlabel="t", ylabel="x_i / μ / V",
+              framestyle=:box)
+    plot!(p2, times_p, beliefs_p[:, 1:k], label="", color=:lightgray, lw=0.5)
+    plot!(p2, times_p, means_p, label="Mean μ(t)", lw=2)
+    plot!(p2, times_p, vars_p, label="Variance V(t)", lw=2, yaxis=:right)
+
+    combined = plot(p1, p2, layout=(1, 2), size=(1200, 550))
+    savefig(combined, joinpath(results_dir, "time_series_plots.png"))
+    return combined
 end
 
-# -----------------------------------------------------------
-# 4. COMPARATIVE STATICS PLOTS
-# -----------------------------------------------------------
-function plot_comparative_statics(λ_fixed, c0_fixed, nu_bar_fixed; results_dir=".")
-    # Plot 1: κ* vs. idiosyncratic noise (σ^2)
-    σ_values = range(0.01, 1.0, length=100)
-    V_star_val = V_star(λ_fixed, σ_values[1], c0_fixed, nu_bar_fixed)
-    κ_critical_vs_σ = [(σ^2) / (2 * V_star_val) for σ in σ_values]
-    p1 = plot(σ_values, κ_critical_vs_σ,
-        title="κ* vs. Noise (σ²)",
-        xlabel="Idiosyncratic Noise (σ)",
-        ylabel="Critical Peer-Influence (κ*)",
-        lw=2, legend=false, framestyle = :box
-    )
+function plot_comparative_statics(lambda_fixed::Float64, c0_fixed::Float64, nubar_fixed::Float64; results_dir::String=".")
+    # κ* vs σ (recompute V* for each σ)
+    sigma_values = range(0.01, 1.0, length=100)
+    kappa_star_vs_sigma = [(σ^2) / (2 * V_star(lambda_fixed, σ, c0_fixed, nubar_fixed)) for σ in sigma_values]
+    p1 = plot(sigma_values, kappa_star_vs_sigma,
+              title="κ* vs Noise σ (with V*(σ))",
+              xlabel="σ", ylabel="κ*", lw=2, framestyle=:box, legend=false)
 
-    # Plot 2: κ* vs. baseline dispersion (V*)
-    V_star_values = range(0.01, 0.5, length=100)
-    σ_fixed = 0.5
-    κ_critical_vs_V = [(σ_fixed^2) / (2 * V) for V in V_star_values]
+    # κ* vs exogenous V* (for intuition, fixing σ)
+    Vstar_values = range(0.01, 0.5, length=100)
+    sigma_fixed = 0.5
+    kappa_star_vs_V = [(sigma_fixed^2) / (2 * V) for V in Vstar_values]
+    p2 = plot(Vstar_values, kappa_star_vs_V,
+              title="κ* vs Baseline Dispersion V* (σ fixed)",
+              xlabel="V*", ylabel="κ*", lw=2, framestyle=:box, legend=false)
 
-    p2 = plot(V_star_values, κ_critical_vs_V,
-        title="κ* vs. Baseline Dispersion (V*)",
-        xlabel="Stationary Variance (V*)",
-        ylabel="Critical Peer-Influence (κ*)",
-        lw=2, legend=false, framestyle = :box
-    )
-
-    combined_plot = plot(p1, p2, layout=(1, 2), size=(1200, 600))
-    savefig(combined_plot, joinpath(results_dir, "comparative_statics.png"))
-    return combined_plot
+    combined = plot(p1, p2, layout=(1, 2), size=(1200, 550))
+    savefig(combined, joinpath(results_dir, "comparative_statics.png"))
+    return combined
 end
 
-# -----------------------------------------------------------
-# 5. HOPF BIFURCATION AMPLITUDE DIAGRAM
-# -----------------------------------------------------------
 """
-    plot_hopf_bifurcation(λ, σ, c0, nu_bar; results_dir=".")
+    plot_hopf_bifurcation(lambda, sigma, c0, nubar; results_dir=".")
 
-Generate and save the amplitude diagram for a Hopf bifurcation. The control
-parameter is the peer-influence `κ` and the oscillation amplitude is obtained
-by numerically integrating the Hopf normal form for `κ` above its critical
-value.
+Toy Hopf-like amplitude diagram with sqrt scaling above κ*.
 """
-function plot_hopf_bifurcation(λ, σ, c0, nu_bar; results_dir=".")
-    V_star_val = V_star(λ, σ, c0, nu_bar)
-    κ_critical = (σ^2) / (2 * V_star_val)
-    κ_values = range(0.0, 1.5 * κ_critical, length=100)
+function plot_hopf_bifurcation(lambda::Float64, sigma::Float64, c0::Float64, nubar::Float64; results_dir::String=".")
+    Vstar = V_star(lambda, sigma, c0, nubar)
+    kappa_crit = (sigma^2) / (2 * Vstar)
+    kappa_values = range(0.0, 1.5 * kappa_crit, length=200)
+    amplitudes = [κ <= kappa_crit ? 0.0 : sqrt(κ - kappa_crit) for κ in kappa_values]
 
-    function hopf_norm!(du, u, μ, t)
-        x, y = u
-        r2 = x^2 + y^2
-        du[1] = μ * x - y - r2 * x
-        du[2] = x + μ * y - r2 * y
-    end
-
-    amplitudes = Float64[]
-    for κ in κ_values
-        μ = κ - κ_critical
-        if μ <= 0
-            push!(amplitudes, 0.0)
-            continue
-        end
-        prob = ODEProblem(hopf_norm!, [0.1, 0.0], (0.0, 50.0), μ)
-        sol = solve(prob, Tsit5(); reltol=1e-8, abstol=1e-8)
-        r = sqrt.(sol[1, :] .^ 2 .+ sol[2, :] .^ 2)
-        push!(amplitudes, mean(r[end-10:end]))
-    end
-
-    p = plot(κ_values, amplitudes,
-        title = "Hopf Bifurcation",
-        xlabel = "Peer-Influence Parameter (κ)",
-        ylabel = "Limit Cycle Amplitude",
-        lw = 2,
-        framestyle = :box,
-        label = "Amplitude"
-    )
-    vline!(p, [κ_critical], label="κ*", linestyle=:dot, color=:black)
+    p = plot(kappa_values, amplitudes,
+             title="Hopf-like Amplitude (toy)",
+             xlabel="Peer Influence (κ)",
+             ylabel="Limit Cycle Amplitude",
+             lw=2, framestyle=:box, label="Amplitude", size=(900, 550))
+    vline!(p, [kappa_crit], label="κ*", linestyle=:dot, color=:black)
 
     savefig(p, joinpath(results_dir, "hopf_bifurcation.png"))
     return p
+end
+
+# -----------------------------------------------------------
+# Orchestration
+# -----------------------------------------------------------
+
+function generate_ou_with_resets_plots(results_dir::String)
+    mkpath(results_dir)
+    Random.seed!(42)  # reproducibility
+
+    # Baseline parameters (toy)
+    lambda = 0.5
+    sigma  = 0.1
+    theta  = 1.0
+    N      = 200
+    T      = 100.0
+    dt     = 0.1
+    c0     = 0.05    # contraction factor (only used in V_star)
+    nubar  = 0.15    # mean jump rate proxy (only used in V_star)
+
+    # Diagnostics for κ*
+    Vstar_val       = V_star(lambda, sigma, c0, nubar)
+    kappa_crit_val  = (sigma^2) / (2 * Vstar_val)
+
+    # 1) Bifurcation-style diagram
+    plot_bifurcation_diagram(lambda, sigma, c0, nubar; results_dir=results_dir)
+
+    # 2) Phase portrait at κ = 0.8 κ*
+    plot_phase_portrait(Dict(:σ => sigma, :λ => lambda), 0.8 * kappa_crit_val; results_dir=results_dir)
+
+    # 3) Time series in consensus vs polarization regimes
+    plot_time_series(lambda, sigma, theta, N, T, dt; results_dir=results_dir)
+
+    # 4) Comparative statics for κ*
+    plot_comparative_statics(lambda, c0, nubar; results_dir=results_dir)
+
+    # 5) Hopf-like amplitude diagram
+    plot_hopf_bifurcation(lambda, sigma, c0, nubar; results_dir=results_dir)
+
+    println("✅ Plots saved in: $(abspath(results_dir))")
+end
+
+function main()
+    results_dir = get(ENV, "RESULTS_DIR", "results")
+    generate_ou_with_resets_plots(results_dir)
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
 end
